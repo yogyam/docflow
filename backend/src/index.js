@@ -14,15 +14,6 @@ console.log('PORT:', process.env.PORT || '3001 (default)');
 const githubRoutes = require('./routes/github');
 const simpleDocRoutes = require('./routes/simpleDocGeneration');
 
-// Only load chat routes if Gemini is available
-let chatRoutes = null;
-if (process.env.GEMINI_API_KEY) {
-  chatRoutes = require('./routes/chat');
-  console.log('✅ Chat routes loaded with Gemini AI integration');
-} else {
-  console.warn('⚠️  Gemini API key missing - chat functionality disabled');
-}
-
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -50,19 +41,6 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/github', githubRoutes);
 app.use('/api/generate', simpleDocRoutes);
-
-// Only enable chat routes if Gemini AI is available
-if (chatRoutes) {
-  app.use('/api/chat', chatRoutes);
-} else {
-  // Provide a simple fallback for chat endpoints
-  app.use('/api/chat', (req, res) => {
-    res.status(503).json({ 
-      error: 'Chat service unavailable', 
-      message: 'Gemini API key not configured. Add GEMINI_API_KEY to enable chat functionality.' 
-    });
-  });
-}
 
 // Health check endpoint
 app.get('/health', (req, res) => {

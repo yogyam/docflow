@@ -1,0 +1,12 @@
+{
+  "name": "docflow-lite-docs-generator",
+  "version": "1.0.0",
+  "description": "Documentation generator for DocFlow Lite",
+  "main": "index.js",
+  "scripts": {
+    "dev": "echo 'No dev script needed'",
+    "build": "echo 'No build needed'"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

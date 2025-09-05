@@ -9,6 +9,30 @@ const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+// Retry function with exponential backoff for Gemini API
+async function retryGeminiCall(callFunction, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await callFunction();
+    } catch (error) {
+      console.log(`🔄 Gemini API attempt ${attempt}/${maxRetries} failed:`, error.message);
+      
+      // If it's a 503 (service unavailable) or rate limit error, retry
+      if (error.status === 503 || error.status === 429 || error.message.includes('overloaded')) {
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`⏳ Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // If it's not a retryable error, or we've exhausted retries, throw
+      throw error;
+    }
+  }
+}
+
 // Helper function to check if a file is a code file
 function isCodeFile(filename) {
   const codeExtensions = [
@@ -95,8 +119,10 @@ Language: ${repoInfo.language || 'Unknown'}
 Code to analyze:
 ${codebaseText}`;
 
-    console.log('🔍 Step 1: Analyzing repository with Gemini...');
-    const analysisResult = await model.generateContent(analysisPrompt);
+    console.log('🔍 Step 1: Analyzing repository with Gemini (with retry logic)...');
+    const analysisResult = await retryGeminiCall(async () => {
+      return await model.generateContent(analysisPrompt);
+    });
     const analysisText = analysisResult.response.text();
 
     let repoAnalysis;
@@ -155,8 +181,10 @@ Create detailed markdown documentation with these sections:
 
 Make it practical, actionable, and specific to ${role} development needs. Include code examples where helpful.`;
 
-    console.log('🔍 Step 2: Generating role-specific documentation...');
-    const docResult = await model.generateContent(docPrompt);
+    console.log('🔍 Step 2: Generating role-specific documentation (with retry logic)...');
+    const docResult = await retryGeminiCall(async () => {
+      return await model.generateContent(docPrompt);
+    });
     const documentation = docResult.response.text();
     
     console.log('✅ Step 2 SUCCESS: Documentation generated');
@@ -288,9 +316,27 @@ This PR adds comprehensive documentation tailored specifically for **${role} dev
 
   } catch (error) {
     console.error('🚀 Complete documentation generation failed:', error);
+    
+    // Provide specific error messages for different scenarios
+    let errorMessage = 'Documentation generation failed';
+    let retryAdvice = '';
+    
+    if (error.status === 503 || error.message.includes('overloaded')) {
+      errorMessage = 'Gemini AI service is temporarily overloaded';
+      retryAdvice = 'Please try again in a few moments. The service is experiencing high traffic.';
+    } else if (error.status === 429) {
+      errorMessage = 'Rate limit exceeded';
+      retryAdvice = 'Too many requests. Please wait a minute before trying again.';
+    } else if (error.message.includes('JSON')) {
+      errorMessage = 'Failed to parse AI response';
+      retryAdvice = 'This is usually temporary. Please try again.';
+    }
+    
     res.status(500).json({
-      error: 'Documentation generation failed',
-      details: error.message
+      error: errorMessage,
+      details: error.message,
+      retryAdvice: retryAdvice,
+      timestamp: new Date().toISOString()
     });
   }
 });

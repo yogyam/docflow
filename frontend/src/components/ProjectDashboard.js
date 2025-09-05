@@ -6,8 +6,7 @@ import {
   Clock, 
   Github, 
   FileText, 
-  Users, 
-  MessageCircle,
+  Users,
   RefreshCw 
 } from 'lucide-react';
 
@@ -62,13 +61,6 @@ const ProjectDashboard = ({ repository, documentationData }) => {
       icon: Users,
       status: documentationData ? 'available' : 'pending',
       description: 'Role-based documentation guides'
-    },
-    {
-      id: 'chat',
-      name: 'AI Assistant',
-      icon: MessageCircle,
-      status: 'ready',
-      description: 'AI-powered Q&A assistant'
     }
   ];
 
@@ -203,11 +195,6 @@ const ProjectDashboard = ({ repository, documentationData }) => {
             <Users className="h-6 w-6 text-green-600 mb-2" />
             <div className="font-medium">Role Guides</div>
             <div className="text-sm text-gray-600">View role-specific guides</div>
-          </button>
-          <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
-            <MessageCircle className="h-6 w-6 text-purple-600 mb-2" />
-            <div className="font-medium">Ask AI</div>
-            <div className="text-sm text-gray-600">Get instant answers</div>
           </button>
           <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
             <RefreshCw className="h-6 w-6 text-orange-600 mb-2" />
