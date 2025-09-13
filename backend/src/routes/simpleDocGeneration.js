@@ -1,16 +1,17 @@
 const express = require('express');
 const { Octokit } = require('@octokit/rest');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const config = require('../config');
 
 const router = express.Router();
 
-// Initialize services
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Initialize services using configuration
+const octokit = new Octokit({ auth: config.GITHUB.TOKEN });
+const genAI = new GoogleGenerativeAI(config.AI.API_KEY);
+const model = genAI.getGenerativeModel({ model: config.AI.MODEL });
 
 // Retry function with exponential backoff for Gemini API
-async function retryGeminiCall(callFunction, maxRetries = 3) {
+async function retryGeminiCall(callFunction, maxRetries = config.AI.MAX_RETRIES) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await callFunction();
@@ -20,7 +21,7 @@ async function retryGeminiCall(callFunction, maxRetries = 3) {
       // If it's a 503 (service unavailable) or rate limit error, retry
       if (error.status === 503 || error.status === 429 || error.message.includes('overloaded')) {
         if (attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, attempt) * config.AI.RETRY_DELAY_BASE; // Configurable exponential backoff
           console.log(`⏳ Waiting ${delay}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
@@ -78,8 +79,8 @@ router.post('/generate-docs', async (req, res) => {
     });
 
     const codeFiles = treeData.tree.filter(item => 
-      item.type === 'blob' && isCodeFile(item.path) && item.size < 50000
-    ).slice(0, 10); // Analyze up to 10 files
+      item.type === 'blob' && isCodeFile(item.path) && item.size < config.GITHUB.MAX_FILE_SIZE
+    ).slice(0, config.GITHUB.FILE_LIMIT); // Analyze up to configurable limit
 
     const fileContents = await Promise.all(
       codeFiles.map(async (file) => {
@@ -250,7 +251,7 @@ This PR adds comprehensive documentation tailored specifically for **${role} dev
 ## 🧠 AI Analysis Results
 - **Functions Analyzed**: ${(repoAnalysis.functions || []).length}
 - **Dependencies Found**: ${(repoAnalysis.dependencies || []).length}
-- **Key Features**: ${(repoAnalysis.keyFeatures || []).slice(0, 3).join(', ')}
+- **Key Features**: ${(repoAnalysis.keyFeatures || []).slice(0, config.DOCS.MAX_FEATURES_COUNT).join(', ')}
 
 ## 🔍 Next Steps
 1. Review the generated documentation

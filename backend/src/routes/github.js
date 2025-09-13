@@ -1,17 +1,18 @@
 const express = require('express');
 const { Octokit } = require('@octokit/rest');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const config = require('../config');
 
 const router = express.Router();
 
 // Initialize services
 const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
+  auth: config.GITHUB.TOKEN,
 });
 
 // 🤖 Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const genAI = new GoogleGenerativeAI(config.AI.API_KEY);
+const model = genAI.getGenerativeModel({ model: config.AI.MODEL });
 
 // � **CODE-SPECIFIC FILE FILTERS**
 const CODE_EXTENSIONS = {
@@ -449,7 +450,7 @@ router.post('/analyze', async (req, res) => {
     console.log(`� Phase 2: Dependency Analysis`);
     analysisResult.analysis_progress.phase = 'dependencies';
     
-    const configFiles = await getFileContents(fileCategories.config.slice(0, 5), owner, repo);
+    const configFiles = await getFileContents(fileCategories.config.slice(0, config.GITHUB.CONFIG_FILES_LIMIT), owner, repo);
     const dependencyMap = await analyzeDependencies(configFiles, analysisResult);
     
     console.log(`📦 Discovered ${dependencyMap.external.size} external dependencies`);
@@ -461,7 +462,7 @@ router.post('/analyze', async (req, res) => {
     
     // Get key architectural files (main entry points, routers, services)
     const architecturalFiles = identifyArchitecturalFiles(fileCategories.source);
-    const keyFiles = await getFileContents(architecturalFiles.slice(0, 8), owner, repo);
+    const keyFiles = await getFileContents(architecturalFiles.slice(0, config.GITHUB.ARCHITECTURAL_FILES_LIMIT), owner, repo);
     
     const architectureAnalysis = await analyzeArchitecture(keyFiles, analysisResult, role);
     
@@ -470,7 +471,7 @@ router.post('/analyze', async (req, res) => {
     analysisResult.analysis_progress.phase = 'features';
     
     // Get remaining important source files
-    const remainingFiles = fileCategories.source.filter(f => !architecturalFiles.includes(f)).slice(0, 10);
+    const remainingFiles = fileCategories.source.filter(f => !architecturalFiles.includes(f)).slice(0, config.GITHUB.SOURCE_FILES_LIMIT);
     const featureFiles = await getFileContents(remainingFiles, owner, repo);
     
     const featureAnalysis = await analyzeFeatures([...keyFiles, ...featureFiles], analysisResult, role);
@@ -570,8 +571,8 @@ router.post('/test-gemini-analysis', async (req, res) => {
     const codeFiles = treeData.tree.filter(item => 
       item.type === 'blob' && 
       isCodeFile(item.path) &&
-      item.size < 50000
-    ).slice(0, 5); // Just 5 files for testing
+      item.size < config.GITHUB.MAX_FILE_SIZE
+    ).slice(0, config.GITHUB.FILE_LIMIT); // Configurable file limit
 
     const fileContents = await Promise.all(
       codeFiles.map(async (file) => {
@@ -593,7 +594,7 @@ router.post('/test-gemini-analysis', async (req, res) => {
     
     const validFiles = fileContents.filter(f => f !== null);
     const codebaseText = validFiles.map(file => 
-      `### File: ${file.path}\n\`\`\`\n${file.content.substring(0, 1000)}\n\`\`\`\n`
+      `### File: ${file.path}\n\`\`\`\n${file.content.substring(0, config.GITHUB.CONTENT_TRUNCATE_SIZE)}\n\`\`\`\n`
     ).join('\n');
 
     // Test different prompts to see which works better
@@ -664,7 +665,7 @@ ${codebaseText}`
               dependenciesCount: parsed.dependencies?.length || 0,
               sampleEndpoint: parsed.endpoints?.[0],
               sampleFunction: parsed.functions?.[0],
-              sampleDependencies: parsed.dependencies?.slice(0, 3)
+              sampleDependencies: parsed.dependencies?.slice(0, config.GITHUB.DEPENDENCIES_SLICE)
             };
           } catch (jsonError) {
             results[testPrompt.name].error = jsonError.message;
@@ -724,8 +725,8 @@ router.post('/test-complete-flow', async (req, res) => {
     });
 
     const codeFiles = treeData.tree.filter(item => 
-      item.type === 'blob' && isCodeFile(item.path) && item.size < 50000
-    ).slice(0, 5);
+      item.type === 'blob' && isCodeFile(item.path) && item.size < config.GITHUB.MAX_FILE_SIZE
+    ).slice(0, config.GITHUB.FILE_LIMIT);
 
     const fileContents = await Promise.all(
       codeFiles.map(async (file) => {
@@ -733,7 +734,7 @@ router.post('/test-complete-flow', async (req, res) => {
           const { data } = await octokit.repos.getContent({ owner, repo, path: file.path });
           return {
             path: file.path,
-            content: Buffer.from(data.content, 'base64').toString('utf-8').substring(0, 1000)
+            content: Buffer.from(data.content, 'base64').toString('utf-8').substring(0, config.GITHUB.CONTENT_TRUNCATE_SIZE)
           };
         } catch (error) {
           return null;
@@ -1225,11 +1226,11 @@ FEATURES (${analysisResult.hierarchical_structure.features.length} discovered):
 ${analysisResult.hierarchical_structure.features.map(f => `- ${f.name}: ${f.description} (${f.endpoints.length} endpoints, ${f.functions.length} functions)`).join('\n')}
 
 DEPENDENCIES:
-- External: ${Array.from(analysisResult.hierarchical_structure.dependencies.external).slice(0, 20).join(', ')}
+- External: ${Array.from(analysisResult.hierarchical_structure.dependencies.external).slice(0, config.DOCS.MAX_DEPENDENCIES_COUNT).join(', ')}
 - Internal relationships: ${analysisResult.hierarchical_structure.dependencies.relationships.length} detected
 
 TOP FUNCTIONS:
-${Array.from(analysisResult.hierarchical_structure.functions.by_importance).slice(0, 10).map(f => `- ${f.name} (${f.importance}): ${f.type} in ${f.file}`).join('\n')}
+${Array.from(analysisResult.hierarchical_structure.functions.by_importance).slice(0, config.DOCS.MAX_FUNCTIONS_COUNT).map(f => `- ${f.name} (${f.importance}): ${f.type} in ${f.file}`).join('\n')}
 
 ROLE CONTEXT: Analyzing for ${role} developer
 FOCUS: ${roleConfig.focus}

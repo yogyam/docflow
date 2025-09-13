@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Github, FileText, Users, Eye, BookOpen, CheckCircle, Sparkles, Code2, Zap, ExternalLink } from 'lucide-react'
+import config from '../config'
 import GitHubConnector from '../components/GitHubConnector'
 import RepositoryDetails from '../components/RepositoryDetails'
 import RoleBasedGuides from '../components/RoleBasedGuides'

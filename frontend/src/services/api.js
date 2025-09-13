@@ -1,11 +1,12 @@
 import axios from 'axios';
+import config, { devLog, debugLog } from '../config';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const BASE_URL = config.API.BASE_URL;
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000, // 30 seconds
+  timeout: config.API.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,11 +15,12 @@ const apiClient = axios.create({
 // Request interceptor for debugging
 apiClient.interceptors.request.use(
   (config) => {
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    devLog(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    debugLog('Request config:', config);
     return config;
   },
   (error) => {
-    console.error('❌ API Request Error:', error);
+    devLog('❌ API Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -26,11 +28,13 @@ apiClient.interceptors.request.use(
 // Response interceptor for debugging
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    devLog(`✅ API Response: ${response.status} ${response.config.url}`);
+    debugLog('Response data:', response.data);
     return response;
   },
   (error) => {
-    console.error('❌ API Response Error:', error.response?.status, error.response?.data || error.message);
+    devLog('❌ API Response Error:', error.response?.status, error.response?.data || error.message);
+    debugLog('Error details:', error);
     return Promise.reject(error);
   }
 );
@@ -40,13 +44,13 @@ export const githubApi = {
   // Connect to a repository (validation)
   connectRepository: async (repoUrl) => {
     try {
-      console.log('🔗 Connecting to repository:', repoUrl);
+      devLog('🔗 Connecting to repository:', repoUrl);
       const response = await apiClient.post('/api/github/connect', {
         repoUrl
       });
       return response.data;
     } catch (error) {
-      console.error('❌ Repository connection failed:', error);
+      devLog('❌ Repository connection failed:', error);
       throw error;
     }
   },

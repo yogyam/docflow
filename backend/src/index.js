@@ -1,41 +1,47 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-// Debug environment variables
-console.log('🔍 Environment check:');
-console.log('GITHUB_TOKEN:', process.env.GITHUB_TOKEN ? 'Present ✅' : 'Missing ❌');
-console.log('GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'Present ✅' : 'Missing ❌');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'not set');
-console.log('PORT:', process.env.PORT || '3001 (default)');
+// Import centralized configuration
+const config = require('./config');
 
 const githubRoutes = require('./routes/github');
 const simpleDocRoutes = require('./routes/simpleDocGeneration');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = config.SERVER.PORT;
 
 // Trust proxy for rate limiting
-app.set('trust proxy', 1);
+if (config.SECURITY.TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+if (config.SECURITY.HELMET_ENABLED) {
+  app.use(helmet());
+}
+
+if (config.SECURITY.CORS_ENABLED) {
+  app.use(cors({
+    origin: config.SERVER.FRONTEND_URL,
+    credentials: true
+  }));
+}
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: config.RATE_LIMIT.WINDOW_MS,
+  max: config.RATE_LIMIT.MAX_REQUESTS,
+  skipSuccessfulRequests: config.RATE_LIMIT.SKIP_SUCCESSFUL_REQUESTS,
+  skipFailedRequests: config.RATE_LIMIT.SKIP_FAILED_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
 // Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: config.API.BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
@@ -52,7 +58,7 @@ app.use((error, req, res, next) => {
   console.error('Error:', error);
   res.status(500).json({ 
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    message: config.LOGGING.ENABLE_ERROR_STACK ? error.message : 'Something went wrong'
   });
 });
 
@@ -63,7 +69,7 @@ app.use('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 DocFlow Lite Backend running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Environment: ${config.SERVER.NODE_ENV}`);
 });
 
 module.exports = app;
