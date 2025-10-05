@@ -10,19 +10,19 @@ const octokit = new Octokit({ auth: config.GITHUB.TOKEN });
 const genAI = new GoogleGenerativeAI(config.AI.API_KEY);
 const model = genAI.getGenerativeModel({ model: config.AI.MODEL });
 
-// Retry function with exponential backoff for Gemini API
+// Retry function with exponential backoff for the generation API
 async function retryGeminiCall(callFunction, maxRetries = config.AI.MAX_RETRIES) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await callFunction();
     } catch (error) {
-      console.log(`🔄 Gemini API attempt ${attempt}/${maxRetries} failed:`, error.message);
+      console.log(`API attempt ${attempt}/${maxRetries} failed:`, error.message);
       
       // If it's a 503 (service unavailable) or rate limit error, retry
       if (error.status === 503 || error.status === 429 || error.message.includes('overloaded')) {
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * config.AI.RETRY_DELAY_BASE; // Configurable exponential backoff
-          console.log(`⏳ Waiting ${delay}ms before retry...`);
+          console.log(`Waiting ${delay}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -70,7 +70,7 @@ router.post('/generate-docs', async (req, res) => {
     const [, owner, repoName] = urlMatch;
     const repo = repoName.replace('.git', '');
 
-    console.log(`🚀 GENERATING DOCS: ${owner}/${repo} for ${role} role`);
+    console.log(`Generating documentation for ${owner}/${repo} (role: ${role})`);
 
     // STEP 1: Get repository data
     const { data: repoInfo } = await octokit.repos.get({ owner, repo });
